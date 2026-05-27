@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ${DB_CONTAINER_NAME}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - sistemaiglesia
+
+  backend:
+    build:
+      context: ${BACKEND_CONTEXT}
+      dockerfile: Dockerfile
+    container_name: ${BACKEND_CONTAINER_NAME}
+    depends_on:
+      - db
+    ports:
+      - "${BACKEND_PORT}:8000"
+    volumes:
+      - ./backend:/var/www/html
+    env_file:
+      - ./.env
+      - ./backend/.env
+    networks:
+      - sistemaiglesia
+    command: >
+      sh -lc "
+      sh /var/www/html/entrypoint.sh
+      "
+
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT}
+      dockerfile: Dockerfile
+    container_name: ${FRONTEND_CONTAINER_NAME}
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - ./.env
+      - ./frontend/.env
+    networks:
+      - sistemaiglesia
+    command: >
+      sh -lc "
+      if [ ! -f package.json ]; then
+        echo 'No se encontró una app Next.js en /app.';
+        echo 'Creala con: npx create-next-app@latest . --ts --tailwind --app --eslint';
+        sleep infinity;
+      fi;
+      npm install;
+      rm -rf .next;
+      npm run dev -- -p 3000 -H 0.0.0.0
+      "
+
+volumes:
+  db_data:
+
+networks:
+  sistemaiglesia:
