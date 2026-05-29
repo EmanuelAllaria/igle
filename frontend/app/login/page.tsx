@@ -29,8 +29,15 @@ export default function LoginPage() {
       }
 
       setError("Credenciales inválidas.");
-    } catch {
-      setError("No se pudo iniciar sesión. Verificá tus credenciales.");
+    } catch (err) {
+      const message =
+        typeof err === "object" &&
+        err &&
+        "response" in err &&
+        typeof (err as any).response?.data?.message === "string"
+          ? (err as any).response.data.message
+          : null;
+      setError(message || "No se pudo iniciar sesión. Verificá tus credenciales.");
     } finally {
       setLoading(false);
     }
