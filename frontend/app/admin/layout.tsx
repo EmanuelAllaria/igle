@@ -12,17 +12,7 @@ export default function AdminLayout(props: { children: ReactNode }) {
 
             <nav className="mt-4 space-y-2">
               <NavLink href="/admin/dashboard" label="Resumen" />
-
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900/30">
-                <NavLink href="/admin/miembros" label="Miembros" />
-                <Link
-                  href="/admin/miembros?create=1"
-                  className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-                >
-                  Crear Miembro
-                </Link>
-              </div>
-
+              <NavLink href="/admin/miembros" label="Miembros" />
               <NavLink href="/admin/discipulados" label="Discipulados" />
               <NavLink href="/admin/forms" label="Formularios" />
             </nav>
