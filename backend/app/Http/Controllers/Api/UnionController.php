@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Union\StoreUnionRequest;
 use App\Http\Requests\Union\UpdateUnionRequest;
+use App\Models\FamiliaGenealogica;
 use App\Models\Union;
 
 class UnionController extends Controller
@@ -21,7 +22,16 @@ class UnionController extends Controller
 
     public function store(StoreUnionRequest $request)
     {
-        $union = Union::query()->create($request->validated());
+        $validated = $request->validated();
+        $a = (int) ($validated['persona1_id'] ?? 0);
+        $b = (int) ($validated['persona2_id'] ?? 0);
+        if ($a > 0 && $b > 0 && $a > $b) {
+            $validated['persona1_id'] = $b;
+            $validated['persona2_id'] = $a;
+        }
+
+        $union = Union::query()->create($validated);
+        FamiliaGenealogica::query()->firstOrCreate(['union_id' => $union->id]);
         $union->load(['persona1', 'persona2', 'tipoUnion', 'estadoUnion']);
 
         return $this->ok($union, 'Unión creada.', 201);
@@ -36,8 +46,17 @@ class UnionController extends Controller
 
     public function update(UpdateUnionRequest $request, Union $union)
     {
-        $union->fill($request->validated());
+        $validated = $request->validated();
+        $a = (int) ($validated['persona1_id'] ?? $union->persona1_id);
+        $b = (int) ($validated['persona2_id'] ?? $union->persona2_id);
+        if ($a > 0 && $b > 0 && $a > $b) {
+            $validated['persona1_id'] = $b;
+            $validated['persona2_id'] = $a;
+        }
+
+        $union->fill($validated);
         $union->save();
+        FamiliaGenealogica::query()->firstOrCreate(['union_id' => $union->id]);
         $union->load(['persona1', 'persona2', 'tipoUnion', 'estadoUnion']);
 
         return $this->ok($union, 'Unión actualizada.');
@@ -50,4 +69,3 @@ class UnionController extends Controller
         return $this->ok(null, 'Unión eliminada.');
     }
 }
-

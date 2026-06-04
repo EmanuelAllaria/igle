@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { MiembroAltaWizardModal } from "./miembro-alta-wizard-modal";
 
 type EstadoCivil = { id: number; nombre: string };
 
@@ -29,6 +34,7 @@ type MiembroDetalle = {
   tel_celular: string | null;
   nro_doc: string | null;
   direccion: string | null;
+  vivienda_id?: number | null;
   anio_ingreso: number | null;
   sexo?: { id: number; nombre: string } | null;
   estado_civil?: EstadoCivil | null;
@@ -37,6 +43,27 @@ type MiembroDetalle = {
   madre?: { id: number; nombre: string; apellido: string } | null;
   uniones_como_persona1?: Array<UnionDetalle>;
   uniones_como_persona2?: Array<UnionDetalle>;
+  hijos_por_padre?: Array<{ id: number; dni?: string | null; nombre: string; apellido: string }>;
+  hijos_por_madre?: Array<{ id: number; dni?: string | null; nombre: string; apellido: string }>;
+  vivienda?: {
+    id: number;
+    direccion: string | null;
+    referencia: string | null;
+    telefono_fijo: string | null;
+    miembros?: Array<{ id: number; dni?: string | null; nombre: string; apellido: string; vivienda_id?: number | null }>;
+  } | null;
+  arbol_genealogico?: {
+    miembro?: { id: number; dni?: string | null; nombre: string; apellido: string } | null;
+    padre?: { id: number; dni?: string | null; nombre: string; apellido: string } | null;
+    madre?: { id: number; dni?: string | null; nombre: string; apellido: string } | null;
+    uniones?: Array<{
+      id: number;
+      tipo_union?: { id: number; nombre: string } | null;
+      estado_union?: { id: number; nombre: string } | null;
+      conyuge?: { id: number; dni?: string | null; nombre: string; apellido: string } | null;
+    }>;
+    hijos?: Array<{ id: number; dni?: string | null; nombre: string; apellido: string }>;
+  } | null;
 };
 
 type UnionDetalle = {
@@ -115,6 +142,9 @@ export default function AdminMiembrosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [qNombre, setQNombre] = useState("");
   const [qProfesion, setQProfesion] = useState("");
@@ -126,12 +156,7 @@ export default function AdminMiembrosPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createStatus, setCreateStatus] = useState<
-    | { kind: "idle" }
-    | { kind: "saving" }
-    | { kind: "success"; message: string }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
+  const [wizardInstance, setWizardInstance] = useState(0);
 
   const [editId, setEditId] = useState<number | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -152,44 +177,6 @@ export default function AdminMiembrosPage() {
   } | null>(null);
   const [catalogosLoading, setCatalogosLoading] = useState(false);
   const [catalogosError, setCatalogosError] = useState<string | null>(null);
-
-  const [form, setForm] = useState<{
-    nombre: string;
-    apellido: string;
-    profesion: string;
-    fecha_nac: string;
-    email: string;
-    tel_celular: string;
-    nro_doc: string;
-    direccion: string;
-    anio_ingreso: string;
-    sexo_id: number | null;
-    estadocivil_id: number | null;
-    bautizado_id: number | null;
-    padre_id: number | null;
-    madre_id: number | null;
-    conyuge_es_iglesia: boolean;
-    conyuge_id: number | null;
-    familia: Array<{ key: string; miembro_id: number | null; tipo_union_id: number | null }>;
-  }>({
-    nombre: "",
-    apellido: "",
-    profesion: "",
-    fecha_nac: "",
-    email: "",
-    tel_celular: "",
-    nro_doc: "",
-    direccion: "",
-    anio_ingreso: "",
-    sexo_id: null,
-    estadocivil_id: null,
-    bautizado_id: null,
-    padre_id: null,
-    madre_id: null,
-    conyuge_es_iglesia: false,
-    conyuge_id: null,
-    familia: [],
-  });
 
   const [editForm, setEditForm] = useState<{
     nombre: string;
@@ -258,94 +245,13 @@ export default function AdminMiembrosPage() {
     const id = setTimeout(() => {
       const url = new URL(window.location.href);
       if (url.searchParams.get("create") !== "1") return;
-      setCreateStatus({ kind: "idle" });
+      setWizardInstance((v) => v + 1);
       setCreateOpen(true);
       url.searchParams.delete("create");
       router.replace(url.pathname);
-      void ensureCatalogosLoaded();
     }, 0);
     return () => clearTimeout(id);
-  }, [ensureCatalogosLoaded, router]);
-
-  async function createMiembro() {
-    setCreateStatus({ kind: "idle" });
-
-    const nombre = form.nombre.trim();
-    const apellido = form.apellido.trim();
-    if (!nombre || !apellido) {
-      setCreateStatus({ kind: "error", message: "Nombre y apellido son obligatorios." });
-      return;
-    }
-
-    const anio = form.anio_ingreso.trim();
-    const anioNum = anio ? Number(anio) : null;
-    if (anio && (Number.isNaN(anioNum) || !Number.isFinite(anioNum))) {
-      setCreateStatus({ kind: "error", message: "Año de ingreso no es válido." });
-      return;
-    }
-
-    setCreateStatus({ kind: "saving" });
-    try {
-      const payload = {
-        nombre,
-        apellido,
-        profesion: form.profesion.trim() ? form.profesion.trim() : null,
-        fecha_nac: form.fecha_nac.trim() ? form.fecha_nac.trim() : null,
-        email: form.email.trim() ? form.email.trim() : null,
-        tel_celular: form.tel_celular.trim() ? form.tel_celular.trim() : null,
-        nro_doc: form.nro_doc.trim() ? form.nro_doc.trim() : null,
-        direccion: form.direccion.trim() ? form.direccion.trim() : null,
-        anio_ingreso: anioNum,
-        sexo_id: form.sexo_id,
-        estadocivil_id: form.estadocivil_id,
-        bautizado_id: form.bautizado_id,
-        padre_id: form.padre_id,
-        madre_id: form.madre_id,
-      };
-
-      const res = await fetch("/api/miembros", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(extractMessage(json) ?? "No se pudo crear el miembro.");
-
-      const created = normalizeDetailResponse(json);
-      const createdId = created?.id ?? null;
-      if (createdId) {
-        await persistUnionesFromForm(createdId, form);
-      }
-
-      setCreateStatus({ kind: "success", message: extractMessage(json) ?? "Miembro creado." });
-      setCreateOpen(false);
-      setForm({
-        nombre: "",
-        apellido: "",
-        profesion: "",
-        fecha_nac: "",
-        email: "",
-        tel_celular: "",
-        nro_doc: "",
-        direccion: "",
-        anio_ingreso: "",
-        sexo_id: null,
-        estadocivil_id: null,
-        bautizado_id: null,
-        padre_id: null,
-        madre_id: null,
-        conyuge_es_iglesia: false,
-        conyuge_id: null,
-        familia: [],
-      });
-      setReloadTick((v) => v + 1);
-    } catch (e) {
-      setCreateStatus({
-        kind: "error",
-        message: e instanceof Error ? e.message : "Error inesperado.",
-      });
-    }
-  }
+  }, [router]);
 
   async function openEdit(id: number) {
     setEditStatus({ kind: "idle" });
@@ -542,7 +448,7 @@ export default function AdminMiembrosPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/miembros?per_page=100", {
+        const res = await fetch(`/api/miembros?per_page=50&page=1`, {
           headers: { Accept: "application/json" },
           cache: "no-store",
         });
@@ -552,8 +458,13 @@ export default function AdminMiembrosPage() {
         const response = isRecord(json) ? (json as Record<string, unknown>) : null;
         const responseData = response && isRecord(response.data) ? (response.data as Record<string, unknown>) : null;
         const array = responseData && Array.isArray(responseData.data) ? (responseData.data as MiembroListItem[]) : [];
+        const currentPage = responseData && typeof responseData.current_page === "number" ? responseData.current_page : 1;
+        const lastPage = responseData && typeof responseData.last_page === "number" ? responseData.last_page : 1;
 
-        if (alive) setMiembros(array);
+        if (!alive) return;
+        setMiembros(array);
+        setPage(currentPage);
+        setHasMore(currentPage < lastPage);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : "Error inesperado.");
       } finally {
@@ -566,6 +477,49 @@ export default function AdminMiembrosPage() {
       alive = false;
     };
   }, [reloadTick]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || loading || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await fetch(`/api/miembros?per_page=50&page=${nextPage}`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(extractMessage(json) ?? "No se pudo cargar más.");
+
+      const response = isRecord(json) ? (json as Record<string, unknown>) : null;
+      const responseData = response && isRecord(response.data) ? (response.data as Record<string, unknown>) : null;
+      const array = responseData && Array.isArray(responseData.data) ? (responseData.data as MiembroListItem[]) : [];
+      const currentPage = responseData && typeof responseData.current_page === "number" ? responseData.current_page : nextPage;
+      const lastPage = responseData && typeof responseData.last_page === "number" ? responseData.last_page : currentPage;
+
+      setMiembros((prev) => {
+        const byId = new Map<number, MiembroListItem>();
+        for (const m of prev) byId.set(m.id, m);
+        for (const m of array) byId.set(m.id, m);
+        return Array.from(byId.values());
+      });
+      setPage(currentPage);
+      setHasMore(currentPage < lastPage);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error inesperado.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loading, loadingMore, page]);
+
+  const estadoCivilOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of miembros) {
+      const v = m.estado_civil?.nombre;
+      if (v) set.add(v);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [miembros]);
 
   const filtered = useMemo(() => {
     const n = qNombre.trim().toLowerCase();
@@ -616,154 +570,147 @@ export default function AdminMiembrosPage() {
   }, [openId]);
 
   return (
-    <main className="flex-1 bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Miembros</h1>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Gestión de miembros (vista administrativa).</p>
+        </div>
+        <Button
+          onClick={() => {
+            setWizardInstance((v) => v + 1);
+            setCreateOpen(true);
+          }}
+        >
+          Crear Miembro
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Miembros</h1>
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-              Gestión de miembros (vista administrativa).
-            </p>
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Buscar</div>
+            <Input value={qNombre} onChange={(e) => setQNombre(e.target.value)} placeholder="Nombre / Apellido" />
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-            onClick={() => {
-              setCreateStatus({ kind: "idle" });
-              setCreateOpen(true);
-              void ensureCatalogosLoaded();
-            }}
-          >
-            Crear Miembro
-          </button>
-        </div>
-
-        <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <SearchInput
-              label="Buscar por nombre"
-              value={qNombre}
-              onChange={setQNombre}
-              placeholder="Ej: Juan Pérez"
-            />
-            <SearchInput
-              label="Filtrar por profesión"
-              value={qProfesion}
-              onChange={setQProfesion}
-              placeholder="Ej: Docente"
-            />
-            <SearchInput
-              label="Filtrar por estado civil"
-              value={qEstadoCivil}
-              onChange={setQEstadoCivil}
-              placeholder="Ej: Casado"
-            />
+          <div>
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Profesión</div>
+            <Input value={qProfesion} onChange={(e) => setQProfesion(e.target.value)} placeholder="Ej: Docente" />
           </div>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0">
-              <thead>
-                <tr className="bg-neutral-50 text-left text-xs font-semibold text-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300">
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Profesión</th>
-                  <th className="px-4 py-3">Estado Civil</th>
-                  <th className="px-4 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {loading ? (
-                  <tr>
-                    <td className="px-4 py-6 text-neutral-600 dark:text-neutral-400" colSpan={4}>
-                      Cargando...
-                    </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td className="px-4 py-6 text-red-700 dark:text-red-300" colSpan={4}>
-                      {error}
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td className="px-4 py-6 text-neutral-600 dark:text-neutral-400" colSpan={4}>
-                      Sin resultados.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((m) => (
-                    <tr
-                      key={m.id}
-                      className="border-t border-neutral-100 hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/40"
-                    >
-                      <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-100">
-                        {fullName(m)}
-                      </td>
-                      <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
-                        {m.profesion ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
-                        {m.estado_civil?.nombre ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900/40 dark:bg-neutral-950 dark:text-red-200 dark:hover:bg-red-950/40"
-                            onClick={() => void deleteMiembro(m.id)}
-                          >
-                            Eliminar
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-                            onClick={() => void openEdit(m.id)}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-                            onClick={() => setOpenId(m.id)}
-                          >
-                            Ver
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div>
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Estado civil</div>
+            <Select value={qEstadoCivil} onChange={(e) => setQEstadoCivil(e.target.value)}>
+              <option value="">Todos</option>
+              {estadoCivilOptions.map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex items-end justify-between gap-2">
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setQNombre("");
+                setQProfesion("");
+                setQEstadoCivil("");
+              }}
+            >
+              Limpiar filtros
+            </Button>
           </div>
         </div>
       </div>
 
-      <MiembroModal
-        open={openId !== null}
-        onClose={() => setOpenId(null)}
-        loading={detailLoading}
-        error={detailError}
-        miembro={detail}
-        formatDate={formatDateDisplay}
-      />
+      <div className="overflow-hidden rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr className="bg-[color:var(--admin-surface-muted)] text-left text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Profesión</th>
+                <th className="px-4 py-3">Estado Civil</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
+                    Cargando...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td className="px-4 py-6 text-red-700 dark:text-red-300" colSpan={4}>
+                    {error}
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
+                    Sin resultados.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((m) => (
+                  <tr key={m.id} className="border-t border-[color:var(--admin-border)] hover:bg-[color:var(--admin-surface-muted)]">
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{fullName(m)}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{m.profesion ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{m.estado_civil?.nombre ?? "-"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-red-200/70 bg-[color:var(--admin-surface)] px-3 py-1.5 text-xs font-medium text-red-800 transition-all duration-200 ease-in-out hover:scale-[1.01] hover:bg-red-50 active:scale-[0.99] dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/45"
+                          onClick={() => void deleteMiembro(m.id)}
+                        >
+                          Eliminar
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-3 py-1.5 text-xs font-medium text-slate-900 shadow-sm transition-all duration-200 ease-in-out hover:scale-[1.01] hover:bg-[color:var(--admin-surface-muted)] active:scale-[0.99] dark:text-slate-100"
+                          onClick={() => void openEdit(m.id)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-xl bg-[color:var(--admin-accent)] px-3 py-1.5 text-xs font-medium text-[color:var(--admin-accent-foreground)] shadow-sm transition-all duration-200 ease-in-out hover:scale-[1.01] hover:bg-[color:var(--admin-accent-hover)] active:scale-[0.99]"
+                          onClick={() => setOpenId(m.id)}
+                        >
+                          Ver
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <MiembroFormModal
+      <div className="flex items-center justify-center">
+        {hasMore ? (
+          <Button variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? "Cargando..." : "Cargar más"}
+          </Button>
+        ) : (
+          <div className="text-xs text-slate-600 dark:text-slate-400">
+            {loading ? "Cargando..." : "Fin del listado"}
+          </div>
+        )}
+      </div>
+
+      <MiembroModal open={openId !== null} onClose={() => setOpenId(null)} loading={detailLoading} error={detailError} miembro={detail} formatDate={formatDateDisplay} />
+
+      <MiembroAltaWizardModal
+        key={wizardInstance}
         open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-        }}
-        status={createStatus}
-        onSave={createMiembro}
-        primaryLabel="Crear"
-        title="Crear Miembro"
-        catalogos={catalogos}
-        catalogosLoading={catalogosLoading}
-        catalogosError={catalogosError}
-        form={form}
-        onFormChange={setForm}
-        selfId={null}
+        onOpenChange={setCreateOpen}
+        onCreated={() => setReloadTick((v) => v + 1)}
       />
 
       <MiembroFormModal
@@ -783,7 +730,7 @@ export default function AdminMiembrosPage() {
         onFormChange={setEditForm}
         selfId={editId}
       />
-    </main>
+    </div>
   );
 }
 
@@ -848,8 +795,6 @@ function MiembroFormModal(props: {
     familia: Array<{ key: string; miembro_id: number | null; tipo_union_id: number | null }>;
   }) => void;
 }) {
-  if (!props.open) return null;
-
   const sexos = props.catalogos?.sexos ?? [];
   const estados = props.catalogos?.estados_civiles ?? [];
   const bautizados = props.catalogos?.bautizados ?? [];
@@ -894,31 +839,21 @@ function MiembroFormModal(props: {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{props.title}</div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Campos del DER</div>
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent className="max-w-3xl">
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>{props.title}</SheetTitle>
+              <SheetDescription>Edición rápida sin perder el contexto del listado.</SheetDescription>
+            </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose} disabled={busy}>
+              Cerrar
+            </Button>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-            disabled={busy}
-          >
-            Cerrar
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="max-h-[75vh] overflow-y-auto p-5">
+        <SheetBody>
           {props.catalogosLoading ? (
             <div className="text-sm text-neutral-600 dark:text-neutral-400">Cargando catálogos...</div>
           ) : props.catalogosError ? (
@@ -1229,28 +1164,18 @@ function MiembroFormModal(props: {
               {props.status.message}
             </div>
           ) : null}
+        </SheetBody>
 
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-              onClick={props.onClose}
-              disabled={busy}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              onClick={props.onSave}
-              disabled={busy}
-            >
-              {busy ? "Guardando..." : props.primaryLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button onClick={props.onSave} disabled={busy}>
+            {busy ? "Guardando..." : props.primaryLabel}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1263,25 +1188,6 @@ function Field(props: { label: string; children: React.ReactNode }) {
   );
 }
 
-function SearchInput(props: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{props.label}</div>
-      <input
-        value={props.value}
-        onChange={(e) => props.onChange(e.target.value)}
-        placeholder={props.placeholder}
-        className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-      />
-    </div>
-  );
-}
-
 function MiembroModal(props: {
   open: boolean;
   onClose: () => void;
@@ -1290,8 +1196,6 @@ function MiembroModal(props: {
   miembro: MiembroDetalle | null;
   formatDate: (v: string | null) => string;
 }) {
-  if (!props.open) return null;
-
   const m = props.miembro;
 
   const uniones = [
@@ -1299,118 +1203,187 @@ function MiembroModal(props: {
     ...(m?.uniones_como_persona2 ?? []),
   ];
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-              {m ? fullName(m) : "Detalle de miembro"}
-            </div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-              Información completa
-            </div>
-          </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-          >
-            Cerrar
-          </button>
-        </div>
+  const arbol = m?.arbol_genealogico ?? null;
+  const arbolUniones = arbol?.uniones ?? [];
+  const arbolHijos = arbol?.hijos ?? [];
+  const convivientes = (m?.vivienda?.miembros ?? []).filter((x) => x.id !== m?.id);
 
-        <div className="max-h-[75vh] overflow-y-auto p-5">
+  return (
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent>
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>{m ? fullName(m) : "Detalle de miembro"}</SheetTitle>
+              <SheetDescription>
+                <span className="flex flex-wrap items-center gap-2">
+                  {m?.nro_doc ? (
+                    <span className="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] px-2 py-0.5">
+                      DNI {m.nro_doc}
+                    </span>
+                  ) : null}
+                  {m?.tel_celular ? (
+                    <span className="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] px-2 py-0.5">
+                      {m.tel_celular}
+                    </span>
+                  ) : null}
+                  {m?.email ? (
+                    <span className="rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] px-2 py-0.5">
+                      {m.email}
+                    </span>
+                  ) : null}
+                </span>
+              </SheetDescription>
+            </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose}>
+              Cerrar
+            </Button>
+          </div>
+        </SheetHeader>
+
+        <SheetBody>
           {props.loading ? (
-            <div className="text-sm text-neutral-600 dark:text-neutral-400">Cargando detalle...</div>
+            <div className="text-sm text-slate-600 dark:text-slate-400">Cargando detalle...</div>
           ) : props.error ? (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
               {props.error}
             </div>
           ) : !m ? (
-            <div className="text-sm text-neutral-600 dark:text-neutral-400">
-              No hay información disponible.
-            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-400">No hay información disponible.</div>
           ) : (
-            <div className="space-y-6">
-              <Section title="Datos">
-                <KeyValue k="Nombre" v={fullName(m)} />
-                <KeyValue k="Profesión" v={m.profesion ?? "-"} />
-              <KeyValue k="Fecha nacimiento" v={props.formatDate(m.fecha_nac)} />
-                <KeyValue k="Documento" v={m.nro_doc ?? "-"} />
-                <KeyValue k="Sexo" v={m.sexo?.nombre ?? "-"} />
-                <KeyValue k="Estado civil" v={m.estado_civil?.nombre ?? "-"} />
-                <KeyValue k="Bautizado" v={m.bautizado?.nombre ?? "-"} />
-                <KeyValue k="Año ingreso" v={m.anio_ingreso?.toString() ?? "-"} />
-              </Section>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Block title="Árbol Genealógico" subtitle="Vínculos de sangre y uniones">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <MiniCard title="Padre" value={arbol?.padre ? fullName(arbol.padre) : m.padre ? fullName(m.padre) : "—"} />
+                  <MiniCard title="Madre" value={arbol?.madre ? fullName(arbol.madre) : m.madre ? fullName(m.madre) : "—"} />
+                </div>
 
-              <Section title="Contacto">
-                <KeyValue k="Email" v={m.email ?? "-"} />
-                <KeyValue k="Teléfono / Celular" v={m.tel_celular ?? "-"} />
-                <KeyValue k="Dirección" v={m.direccion ?? "-"} />
-              </Section>
-
-              <Section title="Padres / Madres">
-                <KeyValue k="Padre" v={m.padre ? fullName(m.padre) : "-"} />
-                <KeyValue k="Madre" v={m.madre ? fullName(m.madre) : "-"} />
-              </Section>
-
-              <Section title="Uniones familiares">
-                {uniones.length === 0 ? (
-                  <div className="text-sm text-neutral-600 dark:text-neutral-400">Sin uniones.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {uniones.map((u) => {
-                      const other =
-                        u.persona1_id === m.id ? u.persona2 : u.persona1;
-                      return (
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Uniones</div>
+                  {arbolUniones.length === 0 && uniones.length === 0 ? (
+                    <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">Sin uniones.</div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {(arbolUniones.length > 0
+                        ? arbolUniones.map((u) => ({
+                            key: `ag-${u.id}`,
+                            nombre: u.conyuge ? fullName(u.conyuge) : "Miembro",
+                            detalle: `${u.tipo_union?.nombre ?? "-"} · ${u.estado_union?.nombre ?? "-"}`,
+                          }))
+                        : uniones.map((u) => {
+                            const other = u.persona1_id === m.id ? u.persona2 : u.persona1;
+                            return {
+                              key: `${u.id}-${u.persona1_id}-${u.persona2_id}`,
+                              nombre: other ? fullName(other) : "Miembro",
+                              detalle: `${u.tipo_union?.nombre ?? "-"} · ${u.estado_union?.nombre ?? "-"}`,
+                            };
+                          })
+                      ).map((row) => (
                         <div
-                          key={`${u.id}-${u.persona1_id}-${u.persona2_id}`}
-                          className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900/30"
+                          key={row.key}
+                          className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] p-4 text-sm shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
                         >
-                          <div className="font-medium text-neutral-900 dark:text-neutral-100">
-                            {other ? fullName(other) : "Miembro"}
-                          </div>
-                          <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-                            {u.tipo_union?.nombre ?? "-"} · {u.estado_union?.nombre ?? "-"}
-                          </div>
+                          <div className="font-medium text-slate-900 dark:text-slate-100">{row.nombre}</div>
+                          <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">{row.detalle}</div>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Hijos</div>
+                  {arbolHijos.length === 0 ? (
+                    <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">Sin hijos vinculados.</div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {arbolHijos.map((h) => (
+                        <div
+                          key={h.id}
+                          className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-4 shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                          <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{fullName(h)}</div>
+                          {h.dni ? <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">DNI {h.dni}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Block>
+
+              <Block title="Información de Residencia" subtitle="Dirección y convivientes (misma vivienda)">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <MiniCard title="Dirección" value={m.vivienda?.direccion ?? m.direccion ?? "—"} />
+                  <MiniCard title="Referencia" value={m.vivienda?.referencia ?? "—"} />
+                  <MiniCard title="Teléfono fijo" value={m.vivienda?.telefono_fijo ?? "—"} />
+                  <MiniCard title="Vivienda ID" value={typeof m.vivienda_id === "number" ? String(m.vivienda_id) : "—"} />
+                </div>
+
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                    Quiénes viven en la misma casa
                   </div>
-                )}
-              </Section>
+                  {typeof m.vivienda_id !== "number" ? (
+                    <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">Sin vivienda asignada.</div>
+                  ) : convivientes.length === 0 ? (
+                    <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">No hay convivientes cargados.</div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {convivientes.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-4 shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{fullName(c)}</div>
+                            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">{c.dni ? `DNI ${c.dni}` : "Sin DNI"}</div>
+                          </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              window.location.href = `/admin/miembros?open=${encodeURIComponent(String(c.id))}`;
+                            }}
+                          >
+                            Ver
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Block>
             </div>
           )}
-        </div>
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose}>
+            Cerrar
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Block(props: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+      <div className="flex flex-col gap-1">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{props.title}</div>
+        <div className="text-xs text-slate-600 dark:text-slate-400">{props.subtitle}</div>
       </div>
+      <div className="mt-5">{props.children}</div>
     </div>
   );
 }
 
-function Section(props: { title: string; children: React.ReactNode }) {
+function MiniCard(props: { title: string; value: string }) {
   return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
-        {props.title}
-      </div>
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{props.children}</div>
-    </div>
-  );
-}
-
-function KeyValue(props: { k: string; v: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-3 text-sm dark:border-neutral-800 dark:bg-neutral-950">
-      <div className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{props.k}</div>
-      <div className="mt-1 font-medium text-neutral-900 dark:text-neutral-100">{props.v}</div>
+    <div className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] p-4 shadow-sm">
+      <div className="text-xs font-medium text-slate-600 dark:text-slate-400">{props.title}</div>
+      <div className="mt-1 font-medium text-slate-900 dark:text-slate-100">{props.value}</div>
     </div>
   );
 }

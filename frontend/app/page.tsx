@@ -3,23 +3,38 @@ import Link from "next/link";
 export default function Home() {
   return (
     <main className="flex-1 bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="mx-auto flex w-full max-w-4xl flex-col px-4 py-14">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Sistema Iglesia
-          </h1>
-          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-            Accesos rápidos.
-          </p>
+      <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-16">
+        <div className="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-10 shadow-2xl shadow-black/[0.08] backdrop-blur">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center rounded-full border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] px-3 py-1 text-xs font-medium text-slate-700 shadow-sm backdrop-blur dark:text-slate-200">
+              Sistema Iglesia
+            </div>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              Centro operativo de la iglesia
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Gestión moderna de miembros, discipulados, ministerios y seguimiento pastoral. Todo con navegación rápida y sin perder contexto.
+            </p>
+          </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Link
-              href="/admin/dashboard"
-              className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm font-medium text-neutral-900 shadow-sm transition hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
+              href="/admin/home"
+              className="group rounded-3xl border border-[color:var(--admin-border)] bg-[linear-gradient(135deg,var(--admin-accent),var(--admin-accent-2))] p-6 shadow-sm transition-all duration-200 ease-in-out hover:scale-[1.01] hover:shadow-md active:scale-[0.99]"
             >
-              Panel Administrativo
-              <div className="mt-1 text-xs font-normal text-neutral-600 dark:text-neutral-400">
-                Acceso al panel de gestión.
+              <div className="text-sm font-semibold tracking-tight text-[color:var(--admin-accent-foreground)]">Panel administrativo</div>
+              <div className="mt-1 text-xs text-[color:var(--admin-accent-foreground)]/80">
+                Entrar al dashboard Home y módulos principales.
+              </div>
+            </Link>
+
+            <Link
+              href="/login"
+              className="rounded-3xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm backdrop-blur transition-all duration-200 ease-in-out hover:scale-[1.01] hover:bg-[color:var(--admin-surface-muted)] active:scale-[0.99]"
+            >
+              <div className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">Iniciar sesión</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Acceso con credenciales.
               </div>
             </Link>
           </div>

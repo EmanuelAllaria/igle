@@ -1,8 +1,47 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f7fb;
+  --foreground: #0b1020;
+
+  --admin-surface: rgba(255, 255, 255, 0.78);
+  --admin-surface-muted: rgba(255, 255, 255, 0.55);
+  --admin-border: rgba(15, 23, 42, 0.08);
+  --admin-border-strong: rgba(15, 23, 42, 0.12);
+
+  --admin-sidebar: rgba(11, 31, 58, 0.92);
+  --admin-sidebar-2: rgba(7, 20, 39, 0.92);
+  --admin-sidebar-foreground: rgba(248, 250, 252, 0.96);
+  --admin-sidebar-muted: rgba(248, 250, 252, 0.70);
+  --admin-sidebar-border: rgba(255, 255, 255, 0.12);
+
+  --admin-accent: #c88b2f;
+  --admin-accent-2: #f2c36b;
+  --admin-accent-hover: #bb7f26;
+  --admin-accent-foreground: #1a1208;
+}
+
+html.dark {
+  --background: #050a16;
+  --foreground: rgba(248, 250, 252, 0.92);
+
+  --admin-surface: rgba(3, 7, 18, 0.62);
+  --admin-surface-muted: rgba(15, 23, 42, 0.52);
+  --admin-border: rgba(226, 232, 240, 0.10);
+  --admin-border-strong: rgba(226, 232, 240, 0.16);
+
+  --admin-sidebar: rgba(6, 16, 34, 0.92);
+  --admin-sidebar-2: rgba(3, 10, 22, 0.92);
+  --admin-sidebar-foreground: rgba(248, 250, 252, 0.92);
+  --admin-sidebar-muted: rgba(226, 232, 240, 0.68);
+  --admin-sidebar-border: rgba(255, 255, 255, 0.12);
+
+  --admin-accent: #d9a24c;
+  --admin-accent-2: #f4d08d;
+  --admin-accent-hover: #c68f3c;
+  --admin-accent-foreground: #0b1220;
 }
 
 @theme inline {
@@ -12,15 +51,20 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background:
+    radial-gradient(1200px 700px at 10% -10%, rgba(30, 64, 175, 0.10), transparent 60%),
+    radial-gradient(900px 520px at 95% -5%, rgba(200, 139, 47, 0.14), transparent 55%),
+    radial-gradient(900px 520px at 30% 110%, rgba(14, 165, 233, 0.10), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html.dark body {
+  background:
+    radial-gradient(1200px 700px at 10% -10%, rgba(56, 189, 248, 0.09), transparent 60%),
+    radial-gradient(900px 520px at 95% -5%, rgba(217, 162, 76, 0.12), transparent 55%),
+    radial-gradient(900px 520px at 20% 110%, rgba(99, 102, 241, 0.08), transparent 55%),
+    var(--background);
 }

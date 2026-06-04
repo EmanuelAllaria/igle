@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Censo;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Models\Miembro;
 
 class StoreCensoGeneralRequest extends ApiFormRequest
 {
@@ -11,6 +12,17 @@ class StoreCensoGeneralRequest extends ApiFormRequest
         if ($this->has('año_ingreso') && !$this->has('anio_ingreso')) {
             $this->merge(['anio_ingreso' => $this->input('año_ingreso')]);
         }
+
+        $dni = $this->input('dni');
+        if (($dni === null || trim((string) $dni) === '') && $this->filled('nro_doc')) {
+            $dni = $this->input('nro_doc');
+        }
+
+        $this->merge([
+            'dni' => $dni,
+            'padre_id' => $this->normalizeMiembroId($this->input('padre_id')),
+            'madre_id' => $this->normalizeMiembroId($this->input('madre_id')),
+        ]);
     }
 
     public function rules(): array
@@ -18,6 +30,7 @@ class StoreCensoGeneralRequest extends ApiFormRequest
         return [
             'nombre' => ['required', 'string', 'max:120'],
             'apellido' => ['required', 'string', 'max:120'],
+            'dni' => ['nullable', 'string', 'max:30', 'unique:miembros,dni'],
             'profesion' => ['nullable', 'string', 'max:120'],
             'fecha_nac' => ['nullable', 'date'],
             'email' => ['nullable', 'email', 'max:150', 'unique:miembros,email'],
@@ -32,5 +45,26 @@ class StoreCensoGeneralRequest extends ApiFormRequest
             'madre_id' => ['nullable', 'integer', 'exists:miembros,id'],
         ];
     }
-}
 
+    private function normalizeMiembroId($value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return (int) $value;
+        }
+
+        if (is_string($value)) {
+            $dni = trim($value);
+            if ($dni === '') {
+                return null;
+            }
+
+            return Miembro::query()->where('dni', $dni)->value('id');
+        }
+
+        return null;
+    }
+}

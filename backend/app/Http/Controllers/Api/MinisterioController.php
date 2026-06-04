@@ -16,6 +16,7 @@ class MinisterioController extends Controller
     {
         $items = Ministerio::query()
             ->with(['grupoMinisterio'])
+            ->withCount(['ministerioMiembros as miembros_count'])
             ->orderBy('nombre')
             ->get();
 
@@ -86,4 +87,3 @@ class MinisterioController extends Controller
         return $this->ok(null, 'Miembro removido del ministerio.');
     }
 }
-

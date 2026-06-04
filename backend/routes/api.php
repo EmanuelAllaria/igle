@@ -2,9 +2,13 @@
 
 use App\Http\Controllers\Api\AsistenciaEventoController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CalendarioController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\CatalogoController;
+use App\Http\Controllers\Api\CensoImportController;
 use App\Http\Controllers\Api\CensoGeneralController;
 use App\Http\Controllers\Api\DiscipuladoController;
+use App\Http\Controllers\Api\FamiliaController;
 use App\Http\Controllers\Api\FormularioController;
 use App\Http\Controllers\Api\MinisterioController;
 use App\Http\Controllers\Api\MiembroController;
@@ -27,6 +31,14 @@ Route::post('forms/{slug}/respuestas', [FormularioController::class, 'storeRespu
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('catalogos', [CatalogoController::class, 'index']);
+
+    Route::get('dashboard/alarmas', [DashboardController::class, 'alarmas']);
+    Route::get('calendario', [CalendarioController::class, 'index']);
+
+    Route::get('familias', [FamiliaController::class, 'index']);
+
+    Route::post('censo/importar', [CensoImportController::class, 'importar']);
+    Route::get('censo/importar/logs', [CensoImportController::class, 'logs']);
 
     Route::apiResource('miembros', MiembroController::class);
 

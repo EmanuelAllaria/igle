@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Miembro\StoreMiembroRequest;
 use App\Http\Requests\Miembro\UpdateMiembroRequest;
 use App\Models\Miembro;
+use App\Services\FamiliaService;
+use App\Services\ViviendaService;
 use Illuminate\Http\Request;
 
 class MiembroController extends Controller
@@ -16,7 +18,16 @@ class MiembroController extends Controller
 
         if ($all) {
             $items = Miembro::query()
-                ->with(['estadoCivil'])
+                ->with([
+                    'estadoCivil',
+                    'ministerios',
+                    'unionesComoPersona1.persona2',
+                    'unionesComoPersona1.tipoUnion',
+                    'unionesComoPersona1.estadoUnion',
+                    'unionesComoPersona2.persona1',
+                    'unionesComoPersona2.tipoUnion',
+                    'unionesComoPersona2.estadoUnion',
+                ])
                 ->orderBy('apellido')
                 ->orderBy('nombre')
                 ->get();
@@ -28,7 +39,16 @@ class MiembroController extends Controller
         $perPage = max(1, min(100, $perPage));
 
         $miembros = Miembro::query()
-            ->with(['estadoCivil'])
+            ->with([
+                'estadoCivil',
+                'ministerios',
+                'unionesComoPersona1.persona2',
+                'unionesComoPersona1.tipoUnion',
+                'unionesComoPersona1.estadoUnion',
+                'unionesComoPersona2.persona1',
+                'unionesComoPersona2.tipoUnion',
+                'unionesComoPersona2.estadoUnion',
+            ])
             ->orderBy('apellido')
             ->orderBy('nombre')
             ->paginate($perPage);
@@ -38,7 +58,13 @@ class MiembroController extends Controller
 
     public function store(StoreMiembroRequest $request)
     {
-        $miembro = Miembro::query()->create($request->validated());
+        $data = $request->validated();
+        $miembroData = $data;
+        unset($miembroData['direccion'], $miembroData['vivienda_direccion'], $miembroData['vivienda_referencia'], $miembroData['vivienda_telefono_fijo']);
+
+        $miembro = Miembro::query()->make($miembroData);
+        app(ViviendaService::class)->syncFromInput($miembro, $data);
+        $miembro->save();
 
         return $this->ok($miembro, 'Miembro creado.', 201);
     }
@@ -51,20 +77,34 @@ class MiembroController extends Controller
             'bautizado',
             'padre',
             'madre',
+            'hijosPorPadre',
+            'hijosPorMadre',
             'unionesComoPersona1.persona2',
             'unionesComoPersona1.tipoUnion',
             'unionesComoPersona1.estadoUnion',
             'unionesComoPersona2.persona1',
             'unionesComoPersona2.tipoUnion',
             'unionesComoPersona2.estadoUnion',
+            'vivienda',
+            'vivienda.miembros',
         ]);
 
-        return $this->ok($miembro);
+        $arbol = app(FamiliaService::class)->arbolPara($miembro);
+
+        return $this->ok([
+            ...$miembro->toArray(),
+            'arbol_genealogico' => $arbol,
+        ]);
     }
 
     public function update(UpdateMiembroRequest $request, Miembro $miembro)
     {
-        $miembro->fill($request->validated());
+        $data = $request->validated();
+        $miembroData = $data;
+        unset($miembroData['direccion'], $miembroData['vivienda_direccion'], $miembroData['vivienda_referencia'], $miembroData['vivienda_telefono_fijo']);
+
+        $miembro->fill($miembroData);
+        app(ViviendaService::class)->syncFromInput($miembro, $data);
         $miembro->save();
 
         return $this->ok($miembro, 'Miembro actualizado.');

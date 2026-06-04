@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 type Anio = { id: number; anio: number };
 type GrupoMiembro = { id: number; nombre: string };
@@ -79,6 +83,11 @@ export default function AdminDiscipuladosPage() {
   const [miembros, setMiembros] = useState<Miembro[]>([]);
   const [miembrosLoading, setMiembrosLoading] = useState(false);
   const [miembrosError, setMiembrosError] = useState<string | null>(null);
+
+  const [qMiembro, setQMiembro] = useState("");
+  const [qEstadoCivil, setQEstadoCivil] = useState("");
+  const [qEstadoAsistencia, setQEstadoAsistencia] = useState<"" | EstadoAsistencia>("");
+  const [visibleRows, setVisibleRows] = useState(50);
 
   const [anios, setAnios] = useState<Anio[]>([]);
   const [gruposMiembro, setGruposMiembro] = useState<GrupoMiembro[]>([]);
@@ -234,6 +243,10 @@ export default function AdminDiscipuladosPage() {
       setMiembrosError(null);
       setEventosLoading(true);
       setEventosError(null);
+      setQMiembro("");
+      setQEstadoCivil("");
+      setQEstadoAsistencia("");
+      setVisibleRows(50);
       setMiembros([]);
       setEventos([]);
       setEventoId(null);
@@ -294,6 +307,43 @@ export default function AdminDiscipuladosPage() {
     if (discipuladoId === null) return false;
     return !eventosLoading && eventos.length === 0;
   }, [discipuladoId, eventosLoading, eventos.length]);
+
+  const estadoCivilOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of miembros) {
+      const v = m.estado_civil?.nombre;
+      if (v) set.add(v);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [miembros]);
+
+  const miembrosFiltered = useMemo(() => {
+    const q = qMiembro.trim().toLowerCase();
+    const ec = qEstadoCivil.trim().toLowerCase();
+    const ea = qEstadoAsistencia;
+
+    return miembros.filter((m) => {
+      if (q) {
+        const name = fullName(m).toLowerCase();
+        const prof = (m.profesion ?? "").toLowerCase();
+        if (!name.includes(q) && !prof.includes(q)) return false;
+      }
+
+      if (ec) {
+        const civil = (m.estado_civil?.nombre ?? "").toLowerCase();
+        if (civil !== ec) return false;
+      }
+
+      if (ea) {
+        const estado = estadoByMiembroId[m.id] ?? "presente";
+        if (estado !== ea) return false;
+      }
+
+      return true;
+    });
+  }, [estadoByMiembroId, miembros, qEstadoAsistencia, qEstadoCivil, qMiembro]);
+
+  const miembrosVisible = useMemo(() => miembrosFiltered.slice(0, visibleRows), [miembrosFiltered, visibleRows]);
 
   async function linkMiembros() {
     if (!discipuladoId) return;
@@ -538,89 +588,74 @@ export default function AdminDiscipuladosPage() {
   }
 
   return (
-    <main className="flex-1 bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Discipulados</h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Registro de asistencia por evento.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Discipulados</h1>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Registro de asistencia por evento.</p>
+      </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
-                Seleccionar discipulado
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-                  onClick={openEditDiscipulado}
-                  disabled={discipuladoId === null}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/40 dark:bg-neutral-950 dark:text-red-200 dark:hover:bg-red-950/40"
-                  onClick={() => void deleteDiscipulado()}
-                  disabled={discipuladoId === null}
-                >
-                  Eliminar
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-                  onClick={() => {
-                    setLinkStatus({ kind: "idle" });
-                    setLinkMiembroIds([]);
-                    setLinkMiembrosOpen(true);
-                  }}
-                  disabled={discipuladoId === null}
-                >
-                  Vincular
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-                  onClick={() => {
-                    setCreateDiscipuladoStatus({ kind: "idle" });
-                    setCreateDiscipuladoOpen(true);
-                  }}
-                >
-                  Nuevo
-                </button>
-              </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Seleccionar discipulado</div>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={openEditDiscipulado} disabled={discipuladoId === null}>
+                Editar
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => void deleteDiscipulado()} disabled={discipuladoId === null}>
+                Eliminar
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setLinkStatus({ kind: "idle" });
+                  setLinkMiembroIds([]);
+                  setLinkMiembrosOpen(true);
+                }}
+                disabled={discipuladoId === null}
+              >
+                Vincular
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setCreateDiscipuladoStatus({ kind: "idle" });
+                  setCreateDiscipuladoOpen(true);
+                }}
+              >
+                Nuevo
+              </Button>
             </div>
-            <select
-              className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-              value={discipuladoId ?? ""}
-              onChange={(e) => setDiscipuladoId(e.target.value ? Number(e.target.value) : null)}
-              disabled={discipuladosLoading}
-            >
-              <option value="">Elegí un discipulado</option>
-              {discipulados.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nombre}
-                  {d.anio?.anio ? ` · ${d.anio.anio}` : ""}
-                  {d.grupo_miembro?.nombre ? ` · ${d.grupo_miembro.nombre}` : ""}
-                </option>
-              ))}
-            </select>
+          </div>
+
+          <Select
+            value={discipuladoId ?? ""}
+            onChange={(e) => setDiscipuladoId(e.target.value ? Number(e.target.value) : null)}
+            disabled={discipuladosLoading}
+          >
+            <option value="">Elegí un discipulado</option>
+            {discipulados.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.nombre}
+                {d.anio?.anio ? ` · ${d.anio.anio}` : ""}
+                {d.grupo_miembro?.nombre ? ` · ${d.grupo_miembro.nombre}` : ""}
+              </option>
+            ))}
+          </Select>
 
             {discipuladosError ? (
               <div className="mt-3 text-sm text-red-700 dark:text-red-300">{discipuladosError}</div>
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+          <div className="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm backdrop-blur">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Evento</div>
-              <button
-                type="button"
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Evento</div>
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={discipuladoId === null}
                 onClick={() => {
                   if (discipuladoId === null) return;
@@ -629,10 +664,9 @@ export default function AdminDiscipuladosPage() {
                 }}
               >
                 Nuevo
-              </button>
+              </Button>
             </div>
-            <select
-              className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+            <Select
               value={eventoId ?? ""}
               onChange={(e) => setEventoId(e.target.value ? Number(e.target.value) : null)}
               disabled={discipuladoId === null || eventosLoading || eventos.length === 0}
@@ -643,7 +677,7 @@ export default function AdminDiscipuladosPage() {
                   {formatEventoLabel(ev)}
                 </option>
               ))}
-            </select>
+            </Select>
 
             {eventosError ? (
               <div className="mt-3 text-sm text-red-700 dark:text-red-300">{eventosError}</div>
@@ -651,11 +685,77 @@ export default function AdminDiscipuladosPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="overflow-hidden rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] shadow-sm backdrop-blur">
+          <div className="border-b border-[color:var(--admin-border)] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
+                <label className="grid gap-1">
+                  <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Buscar</div>
+                  <Input
+                    placeholder="Apellido, nombre o profesión..."
+                    value={qMiembro}
+                    onChange={(e) => {
+                      setQMiembro(e.target.value);
+                      setVisibleRows(50);
+                    }}
+                    disabled={discipuladoId === null || miembrosLoading || miembros.length === 0}
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Estado civil</div>
+                  <Select
+                    value={qEstadoCivil}
+                    onChange={(e) => {
+                      setQEstadoCivil(e.target.value);
+                      setVisibleRows(50);
+                    }}
+                    disabled={discipuladoId === null || miembrosLoading || estadoCivilOptions.length === 0}
+                  >
+                    <option value="">Todos</option>
+                    {estadoCivilOptions.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+
+                <label className="grid gap-1">
+                  <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Asistencia</div>
+                  <Select
+                    value={qEstadoAsistencia}
+                    onChange={(e) => {
+                      setQEstadoAsistencia(e.target.value as "" | EstadoAsistencia);
+                      setVisibleRows(50);
+                    }}
+                    disabled={discipuladoId === null || miembrosLoading || miembros.length === 0}
+                  >
+                    <option value="">Todas</option>
+                    <option value="presente">Presente</option>
+                    <option value="ausente">Ausente</option>
+                    <option value="justificado">Justificado</option>
+                  </Select>
+                </label>
+              </div>
+
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {discipuladoId !== null && miembros.length > 0 ? (
+                  <>
+                    Mostrando <span className="font-medium text-slate-900 dark:text-slate-100">{Math.min(visibleRows, miembrosFiltered.length)}</span> de{" "}
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{miembrosFiltered.length}</span>
+                  </>
+                ) : (
+                  " "
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
-                <tr className="bg-neutral-50 text-left text-xs font-semibold text-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300">
+                <tr className="bg-[color:var(--admin-surface-muted)] text-left text-xs font-semibold text-slate-600 dark:text-slate-300">
                   <th className="px-4 py-3">Miembro</th>
                   <th className="px-4 py-3">Profesión</th>
                   <th className="px-4 py-3">Estado Civil</th>
@@ -665,13 +765,13 @@ export default function AdminDiscipuladosPage() {
               <tbody className="text-sm">
                 {discipuladoId === null ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-600 dark:text-neutral-400" colSpan={4}>
+                    <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
                       Seleccioná un discipulado.
                     </td>
                   </tr>
                 ) : miembrosLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-600 dark:text-neutral-400" colSpan={4}>
+                    <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
                       Cargando miembros...
                     </td>
                   </tr>
@@ -683,28 +783,33 @@ export default function AdminDiscipuladosPage() {
                   </tr>
                 ) : miembros.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-600 dark:text-neutral-400" colSpan={4}>
+                    <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
                       No hay miembros inscriptos.
                     </td>
                   </tr>
+                ) : miembrosFiltered.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-6 text-slate-600 dark:text-slate-400" colSpan={4}>
+                      Sin resultados con los filtros actuales.
+                    </td>
+                  </tr>
                 ) : (
-                  miembros.map((m) => (
+                  miembrosVisible.map((m) => (
                     <tr
                       key={m.id}
-                      className="border-t border-neutral-100 hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/40"
+                      className="border-t border-[color:var(--admin-border)] hover:bg-[color:var(--admin-surface-muted)]"
                     >
-                      <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-100">
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
                         {fullName(m)}
                       </td>
-                      <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                         {m.profesion ?? "-"}
                       </td>
-                      <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                         {m.estado_civil?.nombre ?? "-"}
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+                        <Select
                           value={estadoByMiembroId[m.id] ?? "presente"}
                           onChange={(e) => {
                             const v = e.target.value as EstadoAsistencia;
@@ -714,7 +819,7 @@ export default function AdminDiscipuladosPage() {
                           <option value="presente">Presente</option>
                           <option value="ausente">Ausente</option>
                           <option value="justificado">Justificado</option>
-                        </select>
+                        </Select>
                       </td>
                     </tr>
                   ))
@@ -723,8 +828,8 @@ export default function AdminDiscipuladosPage() {
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-neutral-200 p-4 dark:border-neutral-800 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-neutral-600 dark:text-neutral-400">
+        <div className="flex flex-col gap-3 border-t border-[color:var(--admin-border)] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600 dark:text-slate-400">
               {discipuladoId !== null && eventoId === null
                 ? "Seleccioná un evento para guardar asistencia."
                 : saveStatus.kind === "success"
@@ -732,16 +837,22 @@ export default function AdminDiscipuladosPage() {
                   : saveStatus.kind === "error"
                     ? saveStatus.message
                     : " "}
-            </div>
+          </div>
 
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              disabled={!canSave}
-              onClick={saveAsistencias}
-            >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {miembrosFiltered.length > visibleRows ? (
+              <Button
+                variant="secondary"
+                onClick={() => setVisibleRows((v) => v + 50)}
+                disabled={miembrosLoading}
+              >
+                Cargar más
+              </Button>
+            ) : null}
+
+            <Button disabled={!canSave} onClick={saveAsistencias}>
               {saveStatus.kind === "saving" ? "Guardando..." : "Guardar Asistencia"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -810,7 +921,7 @@ export default function AdminDiscipuladosPage() {
         onRolChange={setLinkRolId}
         onSave={linkMiembros}
       />
-    </main>
+    </div>
   );
 }
 
@@ -832,48 +943,45 @@ function LinkMiembrosModal(props: {
   onRolChange: (id: number | null) => void;
   onSave: () => void;
 }) {
-  if (!props.open) return null;
   const busy = props.status.kind === "saving";
+  const [q, setQ] = useState("");
+
+  const miembrosFiltered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return props.miembros;
+    return props.miembros.filter((m) => `${m.apellido}, ${m.nombre}`.toLowerCase().includes(query));
+  }, [props.miembros, q]);
+
+  const selectedSet = useMemo(() => new Set(props.selectedMiembroIds), [props.selectedMiembroIds]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Vincular miembros</div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Agregar miembros al discipulado</div>
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent className="max-w-2xl">
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>Vincular miembros</SheetTitle>
+              <SheetDescription>Agregar miembros al discipulado sin perder contexto.</SheetDescription>
+            </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose} disabled={busy}>
+              Cerrar
+            </Button>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-            disabled={busy}
-          >
-            Cerrar
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="p-5">
+        <SheetBody>
           {props.catalogosLoading ? (
-            <div className="text-sm text-neutral-600 dark:text-neutral-400">Cargando...</div>
+            <div className="text-sm text-slate-600 dark:text-slate-400">Cargando catálogos...</div>
           ) : props.catalogosError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
               {props.catalogosError}
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3">
             <label className="grid gap-1">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Rol</div>
-              <select
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Rol</div>
+              <Select
                 value={props.selectedRolId ?? ""}
                 onChange={(e) => props.onRolChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={busy || props.catalogosLoading || props.roles.length === 0}
@@ -884,62 +992,98 @@ function LinkMiembrosModal(props: {
                     {r.nombre}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
-            <label className="grid gap-1 sm:col-span-2">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Miembros</div>
-              <select
-                multiple
-                size={10}
-                className="w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-                value={props.selectedMiembroIds.map(String)}
-                onChange={(e) => {
-                  const ids: number[] = [];
-                  for (const opt of Array.from(e.target.selectedOptions)) {
-                    const v = Number(opt.value);
-                    if (Number.isFinite(v)) ids.push(v);
-                  }
-                  props.onMiembrosChange(ids);
-                }}
+            <label className="grid gap-1">
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Buscar miembros</div>
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Apellido, nombre..."
                 disabled={busy || props.catalogosLoading || props.miembros.length === 0}
-              >
-                {props.miembros.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.apellido}, {m.nombre}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-          </div>
 
-          {props.status.kind === "error" ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-              {props.status.message}
+            <div className="rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]">
+              <div className="flex items-center justify-between gap-3 border-b border-[color:var(--admin-border)] px-4 py-3">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Seleccionados: <span className="text-slate-900 dark:text-slate-100">{props.selectedMiembroIds.length}</span>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const ids = miembrosFiltered.map((m) => m.id);
+                    const next = new Set(props.selectedMiembroIds);
+                    for (const id of ids) next.add(id);
+                    props.onMiembrosChange(Array.from(next));
+                  }}
+                  disabled={busy || props.catalogosLoading || miembrosFiltered.length === 0}
+                >
+                  Seleccionar filtrados
+                </Button>
+              </div>
+
+              <div className="max-h-[380px] overflow-y-auto p-2">
+                {miembrosFiltered.length === 0 ? (
+                  <div className="px-3 py-8 text-sm text-slate-600 dark:text-slate-400">Sin resultados.</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-1">
+                    {miembrosFiltered.slice(0, 250).map((m) => {
+                      const checked = selectedSet.has(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-200 ease-in-out hover:bg-[color:var(--admin-surface-muted)] active:scale-[0.99]"
+                          onClick={() => {
+                            const next = new Set(props.selectedMiembroIds);
+                            if (next.has(m.id)) next.delete(m.id);
+                            else next.add(m.id);
+                            props.onMiembrosChange(Array.from(next));
+                          }}
+                          disabled={busy || props.catalogosLoading}
+                        >
+                          <span className="grid h-5 w-5 place-items-center rounded-md border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)]">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              readOnly
+                              className="h-4 w-4 accent-[color:var(--admin-accent)]"
+                            />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                              {m.apellido}, {m.nombre}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          ) : null}
 
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-              onClick={props.onClose}
-              disabled={busy}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              onClick={props.onSave}
-              disabled={busy || props.selectedMiembroIds.length === 0}
-            >
-              {busy ? "Guardando..." : "Vincular"}
-            </button>
+            {props.status.kind === "error" ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+                {props.status.message}
+              </div>
+            ) : null}
           </div>
-        </div>
-      </div>
-    </div>
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button onClick={props.onSave} disabled={busy || props.selectedMiembroIds.length === 0}>
+            {busy ? "Guardando..." : "Vincular"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -959,41 +1103,26 @@ function CreateDiscipuladoModal(props: {
   status: { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
   onSave: () => void;
 }) {
-  if (!props.open) return null;
   const anios = props.anios;
   const grupos = props.gruposMiembro;
   const catalogosEmpty = anios.length === 0 || grupos.length === 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-              Crear Discipulado
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent className="max-w-lg">
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>Crear Discipulado</SheetTitle>
+              <SheetDescription>Nombre, año y grupo.</SheetDescription>
             </div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-              Nombre, año y grupo
-            </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+              Cerrar
+            </Button>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-            disabled={props.status.kind === "saving"}
-          >
-            Cerrar
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="p-5">
+        <SheetBody>
           {props.catalogosLoading ? (
             <div className="text-sm text-neutral-600 dark:text-neutral-400">Cargando catálogos...</div>
           ) : props.catalogosError ? (
@@ -1005,8 +1134,7 @@ function CreateDiscipuladoModal(props: {
           <div className="mt-4 grid grid-cols-1 gap-3">
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Nombre</div>
-              <input
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Input
                 value={props.nombre}
                 onChange={(e) => props.onNombreChange(e.target.value)}
               />
@@ -1014,8 +1142,7 @@ function CreateDiscipuladoModal(props: {
 
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Año</div>
-              <select
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Select
                 value={props.anioId ?? ""}
                 onChange={(e) => props.onAnioChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={props.catalogosLoading || anios.length === 0}
@@ -1028,13 +1155,12 @@ function CreateDiscipuladoModal(props: {
                     {a.anio}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Grupo</div>
-              <select
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Select
                 value={props.grupoId ?? ""}
                 onChange={(e) => props.onGrupoChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={props.catalogosLoading || grupos.length === 0}
@@ -1047,7 +1173,7 @@ function CreateDiscipuladoModal(props: {
                     {g.nombre}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
             {props.status.kind === "error" ? (
@@ -1055,19 +1181,20 @@ function CreateDiscipuladoModal(props: {
                 {props.status.message}
               </div>
             ) : null}
-
-            <button
-              type="button"
-              className="mt-1 inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              disabled={props.status.kind === "saving" || props.catalogosLoading || catalogosEmpty}
-              onClick={props.onSave}
-            >
-              {props.status.kind === "saving" ? "Guardando..." : "Crear"}
-            </button>
           </div>
-        </div>
-      </div>
-    </div>
+
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+            Cancelar
+          </Button>
+          <Button disabled={props.status.kind === "saving" || props.catalogosLoading || catalogosEmpty} onClick={props.onSave}>
+            {props.status.kind === "saving" ? "Guardando..." : "Crear"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1087,37 +1214,26 @@ function EditDiscipuladoModal(props: {
   status: { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
   onSave: () => void;
 }) {
-  if (!props.open) return null;
   const anios = props.anios;
   const grupos = props.gruposMiembro;
   const catalogosEmpty = anios.length === 0 || grupos.length === 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Editar Discipulado</div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Nombre, año y grupo</div>
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent className="max-w-lg">
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>Editar Discipulado</SheetTitle>
+              <SheetDescription>Nombre, año y grupo.</SheetDescription>
+            </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+              Cerrar
+            </Button>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-            disabled={props.status.kind === "saving"}
-          >
-            Cerrar
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="p-5">
+        <SheetBody>
           {props.catalogosLoading ? (
             <div className="text-sm text-neutral-600 dark:text-neutral-400">Cargando catálogos...</div>
           ) : props.catalogosError ? (
@@ -1129,8 +1245,7 @@ function EditDiscipuladoModal(props: {
           <div className="mt-4 grid grid-cols-1 gap-3">
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Nombre</div>
-              <input
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Input
                 value={props.nombre}
                 onChange={(e) => props.onNombreChange(e.target.value)}
               />
@@ -1138,8 +1253,7 @@ function EditDiscipuladoModal(props: {
 
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Año</div>
-              <select
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Select
                 value={props.anioId ?? ""}
                 onChange={(e) => props.onAnioChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={props.catalogosLoading || anios.length === 0}
@@ -1152,13 +1266,12 @@ function EditDiscipuladoModal(props: {
                     {a.anio}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
             <label className="grid gap-1">
               <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Grupo</div>
-              <select
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+              <Select
                 value={props.grupoId ?? ""}
                 onChange={(e) => props.onGrupoChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={props.catalogosLoading || grupos.length === 0}
@@ -1171,7 +1284,7 @@ function EditDiscipuladoModal(props: {
                     {g.nombre}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
             {props.status.kind === "error" ? (
@@ -1179,19 +1292,19 @@ function EditDiscipuladoModal(props: {
                 {props.status.message}
               </div>
             ) : null}
-
-            <button
-              type="button"
-              className="mt-1 inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              disabled={props.status.kind === "saving" || props.catalogosLoading || catalogosEmpty}
-              onClick={props.onSave}
-            >
-              {props.status.kind === "saving" ? "Guardando..." : "Guardar"}
-            </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+            Cancelar
+          </Button>
+          <Button disabled={props.status.kind === "saving" || props.catalogosLoading || catalogosEmpty} onClick={props.onSave}>
+            {props.status.kind === "saving" ? "Guardando..." : "Guardar"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1210,69 +1323,42 @@ function CreateEventoModal(props: {
   status: { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
   onSave: () => void;
 }) {
-  if (!props.open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) props.onClose();
-      }}
-    >
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-5 dark:border-neutral-800">
-          <div>
-            <div className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Crear Evento</div>
-            <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-              Asociado al discipulado {props.discipuladoId ?? "-"}
+    <Sheet open={props.open} onOpenChange={(open) => (open ? null : props.onClose())}>
+      <SheetContent className="max-w-lg">
+        <SheetHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle>Crear evento</SheetTitle>
+              <SheetDescription>Asociado al discipulado {props.discipuladoId ?? "-"}.</SheetDescription>
             </div>
+            <Button variant="secondary" size="sm" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+              Cerrar
+            </Button>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
-            onClick={props.onClose}
-            disabled={props.status.kind === "saving"}
-          >
-            Cerrar
-          </button>
-        </div>
+        </SheetHeader>
 
-        <div className="p-5">
+        <SheetBody>
           <div className="grid grid-cols-1 gap-3">
             <label className="grid gap-1">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Nombre</div>
-              <input
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-                value={props.nombre}
-                onChange={(e) => props.onNombreChange(e.target.value)}
-              />
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Nombre</div>
+              <Input value={props.nombre} onChange={(e) => props.onNombreChange(e.target.value)} />
             </label>
 
             <label className="grid gap-1">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Fecha</div>
-              <input
-                type="datetime-local"
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-                value={props.fecha}
-                onChange={(e) => props.onFechaChange(e.target.value)}
-              />
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Fecha</div>
+              <Input type="datetime-local" value={props.fecha} onChange={(e) => props.onFechaChange(e.target.value)} />
             </label>
 
             <label className="grid gap-1">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Ubicación</div>
-              <input
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
-                value={props.ubicacion}
-                onChange={(e) => props.onUbicacionChange(e.target.value)}
-              />
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Ubicación</div>
+              <Input value={props.ubicacion} onChange={(e) => props.onUbicacionChange(e.target.value)} />
             </label>
 
             <label className="grid gap-1">
-              <div className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Descripción</div>
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Descripción</div>
               <textarea
-                className="min-h-20 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:focus:border-neutral-600"
+                className="min-h-24 w-full rounded-2xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur outline-none transition-all duration-200 ease-in-out hover:border-[color:var(--admin-border-strong)] focus:border-[color:var(--admin-accent)] focus:ring-2 focus:ring-black/5 disabled:opacity-60 dark:text-slate-100 dark:focus:ring-white/10"
                 value={props.descripcion}
                 onChange={(e) => props.onDescripcionChange(e.target.value)}
               />
@@ -1283,18 +1369,18 @@ function CreateEventoModal(props: {
                 {props.status.message}
               </div>
             ) : null}
-
-            <button
-              type="button"
-              className="mt-1 inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
-              disabled={props.status.kind === "saving"}
-              onClick={props.onSave}
-            >
-              {props.status.kind === "saving" ? "Guardando..." : "Crear"}
-            </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={props.onClose} disabled={props.status.kind === "saving"}>
+            Cancelar
+          </Button>
+          <Button disabled={props.status.kind === "saving"} onClick={props.onSave}>
+            {props.status.kind === "saving" ? "Guardando..." : "Crear"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

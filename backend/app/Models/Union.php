@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Union extends Model
 {
@@ -37,5 +38,10 @@ class Union extends Model
     public function estadoUnion(): BelongsTo
     {
         return $this->belongsTo(EstadoUnion::class, 'estado_union_id');
+    }
+
+    public function familiaGenealogica(): HasOne
+    {
+        return $this->hasOne(FamiliaGenealogica::class, 'union_id');
     }
 }

@@ -38,6 +38,18 @@ return new class extends Migration
             ['nombre' => 'Jovenes', 'created_at' => $now, 'updated_at' => $now],
             ['nombre' => 'Adultos', 'created_at' => $now, 'updated_at' => $now],
         ]);
+
+        DB::table('grupo_ministerios')->insertOrIgnore([
+            ['nombre' => 'General'],
+            ['nombre' => 'Culto'],
+            ['nombre' => 'Formación'],
+        ]);
+
+        DB::table('roles_ministerio')->insertOrIgnore([
+            ['nombre' => 'Miembro'],
+            ['nombre' => 'Líder'],
+            ['nombre' => 'Coordinador'],
+        ]);
     }
 
     public function down(): void
@@ -49,6 +61,7 @@ return new class extends Migration
         $current = (int) date('Y');
         DB::table('anios')->whereBetween('anio', [$current - 2, $current + 2])->delete();
         DB::table('grupo_miembros')->whereIn('nombre', ['General', 'Jovenes', 'Adultos'])->delete();
+        DB::table('grupo_ministerios')->whereIn('nombre', ['General', 'Culto', 'Formación'])->delete();
+        DB::table('roles_ministerio')->whereIn('nombre', ['Miembro', 'Líder', 'Coordinador'])->delete();
     }
 };
-

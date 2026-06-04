@@ -205,18 +205,15 @@ export default function AdminFormsPage() {
   }
 
   return (
-    <main className="flex-1 bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Formularios</h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Crear formularios y campos dinámicos.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Formularios</h1>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Crear formularios y campos dinámicos.</p>
+      </div>
 
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-            <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Crear formulario</div>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface)] p-6 shadow-sm">
+          <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Crear formulario</div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Título">
@@ -237,7 +234,7 @@ export default function AdminFormsPage() {
             </div>
 
             <div className="mt-6 flex items-center justify-between gap-3">
-              <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Campos</div>
+              <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Campos</div>
               <button
                 type="button"
                 className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:bg-neutral-900"
@@ -252,7 +249,7 @@ export default function AdminFormsPage() {
               {campos.map((c, idx) => (
                 <div
                   key={c.key}
-                  className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900/30"
+                  className="rounded-xl border border-[color:var(--admin-border)] bg-[color:var(--admin-surface-muted)] p-5 shadow-sm"
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <Field label={`Label #${idx + 1}`}>
@@ -458,9 +455,8 @@ export default function AdminFormsPage() {
               </div>
             ) : null}
           </div>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }
 

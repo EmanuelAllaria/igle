@@ -8,11 +8,16 @@ RUN apt-get update \
     libzip-dev \
     libonig-dev \
     libxml2-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
     postgresql-client \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
   && docker-php-ext-install \
     pdo \
     pdo_pgsql \
     pgsql \
+    gd \
     zip \
     mbstring \
     xml \
